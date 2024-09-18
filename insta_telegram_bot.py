@@ -4,8 +4,8 @@ from telegram import Bot
 import asyncio
 
 # Constants
-TELEGRAM_BOT_TOKEN = '7398205524:AAG6YzTmB8FIfvfgza4oqbyRokLT3bzl1KM'  # Replace with your Telegram bot token
-CHAT_ID = '-1002477858332'                          # Replace with your chat ID or list of chat IDs
+TELEGRAM_BOT_TOKEN = ''  # Replace with your Telegram bot token
+CHAT_ID = ''                          # Replace with your chat ID or list of chat IDs
 POLLING_INTERVAL = 60                              # Poll every minute (in seconds)
 
 # Initialize Instaloader and Telegram Bot
