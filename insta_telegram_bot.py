@@ -1,22 +1,25 @@
+import os
 import instaloader
-import time
-from telegram import Bot
-import asyncio
+from telegram import Update
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
+import logging
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Constants
-TELEGRAM_BOT_TOKEN = 'YOUR-TELEGRAM-BOT-TOKEN'  # Replace with your Telegram bot token
-CHAT_ID = 'YOUR-TELEGRAM-CHAT-ID'             # Replace with your chat ID or list of chat IDs
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')  # Replace with your Telegram bot token
 POLLING_INTERVAL = 60  
 
 # Initialize Instaloader and Telegram Bot
 loader = instaloader.Instaloader()
-bot = Bot(token=TELEGRAM_BOT_TOKEN)
 
 # List to store user data: user_profile and latest_post_id
 users_data = []
 
-def add_user(username):
+async def add_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Add a new user to the users_data list."""
+    username = context.args[0]
     if any(user['user_profile'].username == username for user in users_data):
         print(f"User @{username} is already being monitored.")
         return
@@ -24,6 +27,7 @@ def add_user(username):
     user_profile = instaloader.Profile.from_username(loader.context, username)
     users_data.append({'user_profile': user_profile, 'latest_post_id': None})
     print(f"User @{username} added for monitoring.")
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=f'{username} Added!')
 
 def fetch_latest_post(user_profile):
     """Fetch the latest post for a given user profile."""
@@ -32,7 +36,7 @@ def fetch_latest_post(user_profile):
     
     return latest_post
 
-async def send_latest_post(user):
+async def send_latest_post(user, update, context):
     """Check for new posts, update latest_post_id, and send to Telegram if new."""
     user_profile = user['user_profile']
     latest_post = fetch_latest_post(user_profile)
@@ -46,21 +50,32 @@ async def send_latest_post(user):
         media_url = latest_post.url
         
         # Send message with media URL to Telegram
-        await bot.send_message(chat_id=CHAT_ID, text=f"Latest post from @{user_profile.username}: {media_url}")
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Latest post from @{user_profile.username}: {media_url}")
         print(f"Sent latest post URL from @{user_profile.username} to Telegram.")
     else:
         print(f"No new posts for @{user_profile.username}.")
 
-async def main():
-    # Example usage of adding users
-    add_user('instagram')  # Replace with actual username
-    add_user('cristiano')  # Replace with actual username
+async def refresh(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    for user in users_data:
+            await send_latest_post(user, update, context)
 
-    while True:
-        for user in users_data:
-            await send_latest_post(user)
-        await asyncio.sleep(POLLING_INTERVAL)  # Wait for the specified interval before polling again
+
+# Set up logging
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 
 # Run the main function using asyncio
 if __name__ == "__main__":
-    asyncio.run(main())
+    application = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+
+    # Register handlers
+    add_user_handler = CommandHandler('add', add_user)
+    refresh_handler = MessageHandler(filters.TEXT & (~filters.COMMAND), refresh)
+
+    application.add_handler(add_user_handler)
+    application.add_handler(refresh_handler)
+
+    # Run the bot until you stop it manually (Ctrl+C)
+    application.run_polling()
